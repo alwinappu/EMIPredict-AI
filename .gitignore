@@ -1,0 +1,27 @@
+﻿# Virtual env
+venv/
+venv_backup/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# MLflow / artifacts / large models
+mlruns/
+models/*.pkl
+
+# logs
+*.log
+
+# other
+*.dll
+*.exe
