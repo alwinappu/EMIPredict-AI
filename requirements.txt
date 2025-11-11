@@ -10,3 +10,13 @@ streamlit
 joblib
 PyYAML
 shap
+torch
+tensorflow
+spacy
+opencv-python
+streamlit
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
