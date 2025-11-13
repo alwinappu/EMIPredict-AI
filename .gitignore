@@ -20,7 +20,7 @@ mlartifacts/
 models/*.pkl
 models/*.joblib
 
-# Data files (optional - keep small samples)
+# Data files
 data/*.csv
 
 # IDE
@@ -33,3 +33,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Backup files
+*.bak
