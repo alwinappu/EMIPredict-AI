@@ -1,123 +1,178 @@
-﻿import streamlit as st
+﻿# Save this as: C:\Users\appu0\EMIPredict_AI\pages\EMI_Eligibility.py
+
+import streamlit as st
 import pandas as pd
-import joblib
 import os
+import pickle
+import traceback
 
-MODEL_PATH = "models/emi_eligibility_model.pkl"
+st.set_page_config(page_title="EMI Eligibility", layout="wide")
+st.title("EMI Eligibility Prediction")
+st.info("This page loads a sample input CSV and attempts to use a saved classifier (if available).")
 
-def run():
-    st.header("EMI Eligibility Prediction")
-    st.info("This page loads a saved classifier (default: Random Forest).")
+# locate sample CSV
+sample_csv_paths = [
+    os.path.join("data", "sample_input.csv"),
+    os.path.join(os.getcwd(), "data", "sample_input.csv"),
+]
 
-    st.sidebar.header("Applicant info")
+sample_path = None
+for p in sample_csv_paths:
+    if os.path.exists(p):
+        sample_path = p
+        break
 
-    # Basic applicant inputs
-    age = st.sidebar.number_input("Age", min_value=18, max_value=100, value=30, key="elig_age")
-    monthly_salary = st.sidebar.number_input("Monthly salary", value=50000, key="elig_monthly_salary")
-    years_of_employment = st.sidebar.number_input("Years of employment", value=3, key="elig_years_of_employment")
-    monthly_rent = st.sidebar.number_input("Monthly rent", value=0, key="elig_monthly_rent")
-    family_size = st.sidebar.number_input("Family size", value=4, min_value=1, key="elig_family_size")
-    dependents = st.sidebar.number_input("Dependents", value=1, min_value=0, key="elig_dependents")
-    credit_score = st.sidebar.number_input("Credit score", value=700, min_value=0, key="elig_credit_score")
-    requested_amount = st.sidebar.number_input("Requested loan amount", value=200000, key="elig_requested_amount")
-    requested_tenure = st.sidebar.number_input("Requested tenure (months)", value=36, key="elig_requested_tenure")
+if sample_path is None:
+    st.error("Could not find data/sample_input.csv in the repo. Please ensure the file exists.")
+    st.stop()
 
-    # Extra financial factors (new fields your model expects)
-    current_emi_amount = st.sidebar.number_input("Current EMI amount", value=0, key="elig_current_emi_amount")
-    college_fees = st.sidebar.number_input("College fees", value=0, key="elig_college_fees")
-    school_fees = st.sidebar.number_input("School fees", value=0, key="elig_school_fees")
-    emergency_fund = st.sidebar.number_input("Emergency fund (₹)", value=0, key="elig_emergency_fund")
-    groceries_utilities = st.sidebar.number_input("Groceries & Utilities", value=0, key="elig_groceries_utilities")
-    bank_balance = st.sidebar.number_input("Bank balance", value=0, key="elig_bank_balance")
-    travel_expenses = st.sidebar.number_input("Travel expenses", value=0, key="elig_travel_expenses")
-    other_monthly_expenses = st.sidebar.number_input("Other monthly expenses", value=0, key="elig_other_monthly_expenses")
+# load and show CSV
+try:
+    df = pd.read_csv(sample_path)
+except Exception as e:
+    st.error(f"Failed to read CSV at {sample_path}: {e}")
+    st.stop()
 
-    # Categorical inputs
-    gender = st.sidebar.selectbox("Gender", ["Male", "Female"], key="elig_gender")
-    marital_status = st.sidebar.selectbox("Marital status", ["Single", "Married"], key="elig_marital_status")
-    education = st.sidebar.selectbox("Education", ["Graduate", "Bachelor", "Diploma", "Master", "PhD"], key="elig_education")
-    employment_type = st.sidebar.selectbox("Employment type", ["Private", "Government", "Self-employed"], key="elig_employment_type")
-    company_type = st.sidebar.selectbox("Company type", ["Private", "Public", "Medium", "Small"], key="elig_company_type")
-    house_type = st.sidebar.selectbox("House type", ["Own", "Rented"], key="elig_house_type")
-    existing_loans = st.sidebar.selectbox("Existing loans", ["Yes", "No"], key="elig_existing_loans")
-    emi_scenario = st.sidebar.selectbox("EMI scenario", ["Normal", "E-commerce", "Other"], key="elig_emi_scenario")
+st.subheader("Input preview:")
+st.dataframe(df, use_container_width=True)
+st.write("")  # spacing
 
-    # Build input DataFrame
-    X = pd.DataFrame({
-        "age": [age],
-        "monthly_salary": [monthly_salary],
-        "years_of_employment": [years_of_employment],
-        "monthly_rent": [monthly_rent],
-        "family_size": [family_size],
-        "dependents": [dependents],
-        "credit_score": [credit_score],
-        "requested_amount": [requested_amount],
-        "requested_tenure": [requested_tenure],
-        "current_emi_amount": [current_emi_amount],
-        "college_fees": [college_fees],
-        "school_fees": [school_fees],
-        "emergency_fund": [emergency_fund],
-        "groceries_utilities": [groceries_utilities],
-        "bank_balance": [bank_balance],
-        "travel_expenses": [travel_expenses],
-        "other_monthly_expenses": [other_monthly_expenses],
-        "gender": [gender],
-        "marital_status": [marital_status],
-        "education": [education],
-        "employment_type": [employment_type],
-        "company_type": [company_type],
-        "house_type": [house_type],
-        "existing_loans": [existing_loans],
-        "emi_scenario": [emi_scenario]
-    })
+# Prediction block
+st.subheader("Predict eligibility")
 
-    st.write("Input preview:")
-    st.dataframe(X)
+col1, col2 = st.columns([1, 3])
 
-    if not os.path.exists(MODEL_PATH):
-        st.warning(f"No model found at {MODEL_PATH}. Place a saved model in models/")
-        return
+with col1:
+    predict_btn = st.button("Predict eligibility")
 
-    if st.button("Predict eligibility", key="elig_predict_button"):
-        try:
-            model = joblib.load(MODEL_PATH)
+with col2:
+    model_path_suggestions = [
+        os.path.join("models", "emi_eligibility_model.pkl"),
+        os.path.join("emi_eligibility_model.pkl"),
+        os.path.join("models", "regression_rf.pkl"),
+        os.path.join("regression_rf.pkl"),
+    ]
+    found_models = [p for p in model_path_suggestions if os.path.exists(p)]
+    if found_models:
+        st.success(f"Found model file(s): {', '.join(found_models)}")
+    else:
+        st.warning("No model file found in models/ or repo root. Prediction will fail unless you add one.")
 
-            # Fill missing columns automatically (safe fallback)
-            if hasattr(model, "feature_names_in_"):
-                missing = [c for c in model.feature_names_in_ if c not in X.columns]
-                if missing:
-                    st.warning(f"Auto-filling missing columns: {missing}")
-                    for col in missing:
-                        X[col] = 0
-                X = X.reindex(columns=model.feature_names_in_, fill_value=0)
-
-            pred = model.predict(X)[0]
-            st.success(f"Predicted EMI eligibility: **{pred}**")
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
-# --- Auto-added alignment helper ---
+# helper: align features safely for the model
 def align_features_for_model(X, model):
-    import pandas as pd
     required = list(getattr(model, "feature_names_in_", []))
     if not required:
         return X, []
+    
     categorical = {"gender","marital_status","education","employment_type",
                    "company_type","house_type","existing_loans","emi_scenario"}
     X2 = X.copy()
     added = []
+    
     for col in required:
         if col not in X2.columns:
             X2[col] = "Unknown" if col in categorical else 0
             added.append(col)
+    
     X2 = X2.loc[:, required]
     return X2, added
 
-# --- Safe prediction wrapper ---
-try:
-    X_aligned, added_cols = align_features_for_model(X, model)
-    if added_cols:
-        st.warning(f"Added default values for missing columns: {added_cols}")
-    pred = model.predict(X_aligned)
-    st.success(f"Predicted EMI eligibility: **{pred[0]}**")
-except Exception as e:
-    st.error(f"Prediction failed after alignment: {e}")
+if predict_btn:
+    # try to load preprocessing helper
+    preprocess_fn = None
+    try:
+        from src.preprocessing import preprocess_input
+        preprocess_fn = preprocess_input
+        st.info("Using src.preprocessing.preprocess_input to prepare data.")
+    except Exception:
+         pass  # Use raw CSV directly
+    
+    # find model file
+    model_file = None
+    for p in model_path_suggestions:
+        if os.path.exists(p):
+            model_file = p
+            break
+    
+    if model_file is None:
+        st.error("No model file found. Place your trained model in models/ and try again.")
+    else:
+        model = None
+        # Try joblib first
+        try:
+            import joblib
+            model = joblib.load(model_file)
+            st.success(f"✅ Model loaded with joblib from {model_file}")
+        except Exception as e1:
+            # Try pickle
+            try:
+                with open(model_file, "rb") as f:
+                    model = pickle.load(f, encoding='latin1')
+                st.success(f"✅ Model loaded with pickle from {model_file}")
+            except Exception as e2:
+                # Train new model
+                st.warning("⚠️ Could not load model. Training new one...")
+                try:
+                    from sklearn.ensemble import RandomForestClassifier
+                    import joblib
+                    
+                    train_path = "data/sample_EMI_dataset_train.csv"
+                    if os.path.exists(train_path):
+                        df_train = pd.read_csv(train_path)
+                        X_train = df_train.select_dtypes(include=['number']).fillna(0)
+                        
+                        target_col = None
+                        for col in ['emi_eligibility', 'EMI_Eligibility', 'eligibility']:
+                            if col in df_train.columns:
+                                target_col = col
+                                break
+                        
+                        if target_col:
+                            y_train = df_train[target_col]
+                            model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+                            model.fit(X_train, y_train)
+                            joblib.dump(model, "models/emi_eligibility_model.pkl")
+                            st.success("✅ New model trained and saved!")
+                        else:
+                            st.error("Target column not found")
+                    else:
+                        st.error(f"Training data not found at {train_path}")
+                except Exception as e3:
+                    st.error(f"Failed to train model: {e3}")
+                    st.text(traceback.format_exc())
+        
+        if model is not None:
+            try:
+                if preprocess_fn:
+                    X = preprocess_fn(df.copy())
+                else:
+                    X = df.copy()
+            except Exception as e:
+                st.error(f"Preprocessing failed: {e}")
+                st.text(traceback.format_exc())
+                X = None
+            
+            if X is not None:
+                try:
+                    X_aligned, added_cols = align_features_for_model(X, model)
+                    if added_cols:
+                        st.warning(f"Added defaults for: {added_cols}")
+                    
+                    preds = model.predict(X_aligned)
+                    st.success("✅ Prediction completed!")
+                    
+                    if hasattr(preds, "tolist"):
+                        st.write("Predicted (first row):", preds.tolist()[0])
+                    else:
+                        st.write("Predicted (first row):", preds[0])
+                except Exception as e:
+                    st.error(f"Prediction failed: {e}")
+                    st.text(traceback.format_exc())
+
+st.write("---")
+st.markdown("""
+**Notes**
+- Ensure data/sample_input.csv exists
+- Model should be in models/ directory  
+- Check sklearn version compatibility
+""")

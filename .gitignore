@@ -1,27 +1,35 @@
-﻿# Virtual env
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
-venv_backup/
 env/
 ENV/
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
+# Streamlit
+.streamlit/
+streamlit.log
 
-# IDE / OS
+# MLflow
+mlruns/
+mlartifacts/
+
+# Models (too large for GitHub)
+models/*.pkl
+models/*.joblib
+
+# Data files (optional - keep small samples)
+data/*.csv
+
+# IDE
 .vscode/
 .idea/
+
+# OS
 .DS_Store
 Thumbs.db
 
-# MLflow / artifacts / large models
-mlruns/
-models/*.pkl
-
-# logs
+# Logs
 *.log
-
-# other
-*.dll
-*.exe

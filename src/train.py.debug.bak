@@ -189,17 +189,7 @@ def main(args):
     if REG_COL in df.columns:
         df[REG_COL] = pd.to_numeric(df[REG_COL], errors="coerce")
 
-    # --- DEBUG: show dataframe just before train_test_val_split ---
-print('DEBUG_PRE_SPLIT: shape=', getattr(df, 'shape', None))
-print('DEBUG_PRE_SPLIT: columns=', list(df.columns)[:50])   # show up to first 50 columns
-try:
-    if 'emi_scenario' in df.columns:
-        print('DEBUG_PRE_SPLIT: emi_scenario value_counts->', df['emi_scenario'].value_counts(dropna=False).to_dict())
-    else:
-        print('DEBUG_PRE_SPLIT: emi_scenario column MISSING')
-except Exception as _e:
-    print('DEBUG_PRE_SPLIT: value_counts raised', repr(_e))
-# --- end debug ---train_df, val_df, test_df = train_test_val_split(df, target_class_col=CLASS_COL)
+    train_df, val_df, test_df = train_test_val_split(df, target_class_col=CLASS_COL)
 
     preprocessor, numeric_features, categorical_features = build_preprocessor(train_df)
 
@@ -255,5 +245,4 @@ if __name__ == "__main__":
     parser.add_argument("--experiment", type=str, default="EMIPredict", help="MLflow experiment name")
     args = parser.parse_args()
     main(args)
-
 

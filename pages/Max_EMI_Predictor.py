@@ -137,3 +137,4 @@ def run():
             st.success(f"Predicted max monthly EMI: **{float(pred):,.2f}**")
         except Exception as e:
             st.error(f"Prediction failed: {e}")
+run()
