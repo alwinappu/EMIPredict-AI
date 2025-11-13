@@ -1,54 +1,82 @@
 ﻿# pages/Max_EMI_Predictor.py
 import streamlit as st
 import pandas as pd
-import joblib
-import os
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
 
-MODEL_PATH = os.path.join(os.getcwd(), "models", "regression_rf.pkl")
-DATA_PATH = os.path.join(os.getcwd(), "data", "sample_EMI_dataset_large.csv")
-
-def train_and_save_model():
-    """Train a new regression model and save it"""
-    try:
-        if not os.path.exists(DATA_PATH):
-            st.error(f"Training data not found at {DATA_PATH}")
-            return None
-        
-        # Load training data
-        df = pd.read_csv(DATA_PATH)
-        
-        # Prepare features and target
-        target_col = 'max_emi'  # or 'max_emi_amount' - check your CSV
-        if target_col not in df.columns:
-            target_col = 'max_emi_amount'
-        
-        X = df.drop(columns=[target_col])
-        y = df[target_col]
-        
-        # Train model
-        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-        model.fit(X, y)
-        
-        # Save model
-        os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        joblib.dump(model, MODEL_PATH)
-        
-        st.success("✅ Model trained successfully with current environment!")
-        return model
-    except Exception as e:
-        st.error(f"Training failed: {e}")
-        return None
-
-def load_model(path):
-    if os.path.exists(path):
-        try:
-            return joblib.load(path)
-        except Exception as e:
-            st.warning(f"⚠️ Incompatible model detected. Retraining with current environment...")
-            return train_and_save_model()
-    return train_and_save_model()
+def calculate_max_emi(monthly_salary, current_emi_amount, monthly_rent, 
+                      school_fees, college_fees, travel_expenses, 
+                      groceries_utilities, other_monthly_expenses, 
+                      credit_score, age, dependents, emergency_fund, bank_balance):
+    """
+    Calculate maximum safe EMI using standard lending criteria:
+    - Max debt-to-income ratio: 40-50% of monthly income
+    - Adjusted based on credit score, age, dependents
+    """
+    
+    # Calculate total fixed monthly expenses
+    total_expenses = (
+        monthly_rent + school_fees + college_fees + 
+        travel_expenses + groceries_utilities + 
+        other_monthly_expenses + current_emi_amount
+    )
+    
+    # Calculate disposable income
+    disposable_income = monthly_salary - total_expenses
+    
+    # Base EMI capacity: 40-50% of monthly income
+    base_emi_ratio = 0.45  # 45% baseline
+    
+    # Adjust based on credit score
+    if credit_score >= 750:
+        credit_multiplier = 1.1  # Can afford 10% more
+    elif credit_score >= 650:
+        credit_multiplier = 1.0
+    elif credit_score >= 550:
+        credit_multiplier = 0.85  # Reduce by 15%
+    else:
+        credit_multiplier = 0.7  # Reduce by 30%
+    
+    # Adjust based on age (younger = longer loan tenure possible)
+    if age < 30:
+        age_multiplier = 1.05
+    elif age < 45:
+        age_multiplier = 1.0
+    elif age < 55:
+        age_multiplier = 0.9
+    else:
+        age_multiplier = 0.75
+    
+    # Adjust based on dependents
+    if dependents == 0:
+        dependent_multiplier = 1.05
+    elif dependents <= 2:
+        dependent_multiplier = 1.0
+    else:
+        dependent_multiplier = 0.9
+    
+    # Emergency fund factor (should have 6 months expenses saved)
+    required_emergency = total_expenses * 6
+    if emergency_fund >= required_emergency:
+        safety_multiplier = 1.0
+    elif emergency_fund >= required_emergency * 0.5:
+        safety_multiplier = 0.95
+    else:
+        safety_multiplier = 0.85
+    
+    # Calculate maximum safe EMI
+    max_emi = (
+        monthly_salary * base_emi_ratio * 
+        credit_multiplier * age_multiplier * 
+        dependent_multiplier * safety_multiplier
+    ) - current_emi_amount
+    
+    # Ensure minimum safety: EMI should not exceed 50% of disposable income
+    safe_limit = disposable_income * 0.5
+    max_emi = min(max_emi, safe_limit)
+    
+    # Cannot be negative
+    max_emi = max(0, max_emi)
+    
+    return max_emi
 
 def build_input_df():
     st.sidebar.header("Applicant Info")
@@ -59,7 +87,18 @@ def build_input_df():
     monthly_rent = st.sidebar.number_input("Monthly rent", value=0, key="max_monthly_rent")
     family_size = st.sidebar.number_input("Family size", value=4, min_value=1, key="max_family_size")
     dependents = st.sidebar.number_input("Dependents", value=1, min_value=0, key="max_dependents")
-    credit_score = st.sidebar.number_input("Credit score", value=700, min_value=0, key="max_credit_score")
+    credit_score = st.sidebar.number_input("Credit score", value=700, min_value=300, max_value=900, key="max_credit_score")
+    
+    with st.sidebar.expander("📊 Additional Financial Details"):
+        school_fees = st.number_input("School fees (monthly)", value=0, key="school_fees")
+        college_fees = st.number_input("College fees (monthly)", value=0, key="college_fees")
+        travel_expenses = st.number_input("Travel expenses (monthly)", value=2000, key="travel_exp")
+        groceries_utilities = st.number_input("Groceries & utilities (monthly)", value=5000, key="groceries")
+        other_monthly_expenses = st.number_input("Other monthly expenses", value=1000, key="other_exp")
+        current_emi_amount = st.number_input("Current EMI amount", value=0, key="current_emi")
+        bank_balance = st.number_input("Bank balance", value=20000, key="bank_bal")
+        emergency_fund = st.number_input("Emergency fund", value=0, key="emerg_fund")
+    
     requested_amount = st.sidebar.number_input("Requested loan amount", value=200000, key="max_requested_amount")
     requested_tenure = st.sidebar.number_input("Requested tenure (months)", value=36, key="max_requested_tenure")
     
@@ -72,7 +111,7 @@ def build_input_df():
     existing_loans = st.sidebar.selectbox("Existing loans", ["Yes", "No"], key="max_existing_loans")
     emi_scenario = st.sidebar.selectbox("EMI scenario", ["Normal", "E-commerce", "Other"], key="max_emi_scenario")
     
-    row = {
+    return {
         "age": age,
         "monthly_salary": monthly_salary,
         "years_of_employment": years_of_employment,
@@ -80,14 +119,14 @@ def build_input_df():
         "family_size": family_size,
         "dependents": dependents,
         "credit_score": credit_score,
-        "school_fees": 0,
-        "college_fees": 0,
-        "travel_expenses": 0,
-        "groceries_utilities": 0,
-        "other_monthly_expenses": 0,
-        "current_emi_amount": 0,
-        "bank_balance": 0,
-        "emergency_fund": 0,
+        "school_fees": school_fees,
+        "college_fees": college_fees,
+        "travel_expenses": travel_expenses,
+        "groceries_utilities": groceries_utilities,
+        "other_monthly_expenses": other_monthly_expenses,
+        "current_emi_amount": current_emi_amount,
+        "bank_balance": bank_balance,
+        "emergency_fund": emergency_fund,
         "requested_amount": requested_amount,
         "requested_tenure": requested_tenure,
         "gender": gender,
@@ -99,59 +138,83 @@ def build_input_df():
         "existing_loans": existing_loans,
         "emi_scenario": emi_scenario
     }
-    
-    return pd.DataFrame([row])
 
 def run():
     st.title("Maximum EMI Predictor")
-    st.info("Predicts a recommended 'max safe monthly EMI' for the applicant using a regression model.")
+    st.info("✨ Calculates a recommended 'max safe monthly EMI' based on proven lending criteria and your financial profile.")
     
-    model = load_model(MODEL_PATH)
-    X = build_input_df()
+    data = build_input_df()
     
-    st.write("Input preview:")
-    st.dataframe(X)
+    # Display input preview
+    st.write("📋 **Input preview:**")
+    preview_df = pd.DataFrame([{
+        "Age": data["age"],
+        "Monthly Salary": f"₹{data['monthly_salary']:,}",
+        "Credit Score": data["credit_score"],
+        "Dependents": data["dependents"],
+        "Current EMI": f"₹{data['current_emi_amount']:,}",
+        "Monthly Rent": f"₹{data['monthly_rent']:,}"
+    }])
+    st.dataframe(preview_df, use_container_width=True)
     
-    MODEL_FEATURES = [
-        "age", "monthly_salary", "years_of_employment", "monthly_rent", "family_size", "dependents",
-        "school_fees", "college_fees", "travel_expenses", "groceries_utilities", "other_monthly_expenses",
-        "current_emi_amount", "credit_score", "bank_balance", "emergency_fund", "requested_amount",
-        "requested_tenure", "gender", "marital_status", "education", "employment_type", "company_type",
-        "house_type", "existing_loans", "emi_scenario"
-    ]
-    
-    categorical_defaults = {
-        "gender": "Unknown", "marital_status": "Unknown", "education": "Unknown",
-        "employment_type": "Unknown", "company_type": "Unknown", "house_type": "Unknown",
-        "existing_loans": "No", "emi_scenario": "Normal",
-    }
-    
-    numeric_defaults = {
-        "school_fees": 0, "college_fees": 0, "travel_expenses": 0, "groceries_utilities": 0,
-        "other_monthly_expenses": 0, "current_emi_amount": 0, "bank_balance": 0, "emergency_fund": 0
-    }
-    
-    for col in MODEL_FEATURES:
-        if col not in X.columns:
-            if col in categorical_defaults:
-                X[col] = categorical_defaults[col]
-            elif col in numeric_defaults:
-                X[col] = numeric_defaults[col]
-            else:
-                X[col] = 0
-    
-    X = X[MODEL_FEATURES]
-    X_encoded = X.apply(pd.to_numeric, errors="coerce").fillna(0)
-    
-    if model is None:
-        st.error("❌ Model unavailable. Please ensure training data exists in data/ folder.")
-    else:
-        if st.button("Predict max EMI", key="max_predict_button"):
-            try:
-                pred = model.predict(X_encoded)[0]
-                st.success(f"✅ Predicted max monthly EMI: **₹{float(pred):,.2f}**")
-            except Exception as e:
-                st.error(f"❌ Prediction failed: {e}")
+    if st.button("💰 Calculate Maximum EMI", key="max_predict_button", type="primary"):
+        try:
+            max_emi = calculate_max_emi(
+                monthly_salary=data["monthly_salary"],
+                current_emi_amount=data["current_emi_amount"],
+                monthly_rent=data["monthly_rent"],
+                school_fees=data["school_fees"],
+                college_fees=data["college_fees"],
+                travel_expenses=data["travel_expenses"],
+                groceries_utilities=data["groceries_utilities"],
+                other_monthly_expenses=data["other_monthly_expenses"],
+                credit_score=data["credit_score"],
+                age=data["age"],
+                dependents=data["dependents"],
+                emergency_fund=data["emergency_fund"],
+                bank_balance=data["bank_balance"]
+            )
+            
+            st.success(f"### ✅ Recommended Maximum Monthly EMI: **₹{max_emi:,.2f}**")
+            
+            # Additional insights
+            col1, col2, col3 = st.columns(3)
+            
+            total_expenses = (data["monthly_rent"] + data["school_fees"] + 
+                            data["college_fees"] + data["travel_expenses"] + 
+                            data["groceries_utilities"] + data["other_monthly_expenses"] + 
+                            data["current_emi_amount"])
+            
+            disposable = data["monthly_salary"] - total_expenses
+            emi_percentage = (max_emi / data["monthly_salary"] * 100) if data["monthly_salary"] > 0 else 0
+            
+            with col1:
+                st.metric("Total Monthly Expenses", f"₹{total_expenses:,.0f}")
+            with col2:
+                st.metric("Disposable Income", f"₹{disposable:,.0f}")
+            with col3:
+                st.metric("EMI as % of Income", f"{emi_percentage:.1f}%")
+            
+            # Loan affordability
+            if max_emi > 0:
+                # Assuming 10% annual interest rate and requested tenure
+                rate_monthly = 0.10 / 12
+                tenure = data["requested_tenure"]
+                
+                if rate_monthly > 0:
+                    max_loan_amount = max_emi * ((1 - (1 + rate_monthly)**(-tenure)) / rate_monthly)
+                else:
+                    max_loan_amount = max_emi * tenure
+                
+                st.info(f"📊 **Loan Affordability:** With this EMI capacity, you can afford a loan of approximately **₹{max_loan_amount:,.0f}** over {tenure} months at 10% interest rate.")
+                
+                if data["requested_amount"] <= max_loan_amount:
+                    st.success(f"✅ Your requested loan amount (₹{data['requested_amount']:,}) is within your safe borrowing capacity!")
+                else:
+                    st.warning(f"⚠️ Your requested loan amount (₹{data['requested_amount']:,}) exceeds the recommended safe limit. Consider a longer tenure or lower amount.")
+            
+        except Exception as e:
+            st.error(f"❌ Calculation failed: {e}")
 
 if __name__ == "__main__":
     run()
