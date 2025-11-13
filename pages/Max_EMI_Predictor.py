@@ -11,9 +11,16 @@ MODEL_PATH = os.path.join(os.getcwd(), "models", "regression_rf.pkl")
 def load_model(path):
     if os.path.exists(path):
         try:
+            import joblib
             return joblib.load(path)
-        except Exception as e:
-            st.error(f"Failed to load model: {e}")
+        except Exception as e1:
+            try:
+                with open(path, 'rb') as f:
+                    model = pickle.load(f, encoding='latin1')
+                return model
+            except Exception as e2:
+                st.error(f"Model incompatible. Will auto-train: {e2}")
+                return None
     return None
 
 
