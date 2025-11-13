@@ -1,0 +1,2 @@
+﻿age,monthly_salary,years_of_employment,monthly_rent,family_size,dependents,credit_score,requested_amount,requested_tenure,current_emi_amount,college_fees,school_fees,emergency_fund,groceries_utilities,bank_balance,travel_expenses,other_monthly_expenses,gender,marital_status,education,employment_type,company_type,house_type,existing_loans,emi_scenario
+30,50000,3,0,4,1,700,200000,36,0,0,0,0,5000,20000,2000,1000,M,married,graduate,salaried,private,owned,0,default

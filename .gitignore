@@ -2,26 +2,17 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 .Python
 venv/
 env/
 ENV/
 
 # Streamlit
-.streamlit/
 streamlit.log
 
 # MLflow
 mlruns/
 mlartifacts/
-
-# Models (too large for GitHub)
-models/*.pkl
-models/*.joblib
-
-# Data files
-data/*.csv
 
 # IDE
 .vscode/
@@ -36,3 +27,10 @@ Thumbs.db
 
 # Backup files
 *.bak
+*_backup/
+models_backup/
+debug_load.py
+fix_model.py
+test_*.py
+setup_*.ps1
+streamlit_start.log.*
