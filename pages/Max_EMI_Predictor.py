@@ -3,29 +3,21 @@ import streamlit as st
 import pandas as pd
 import joblib
 import os
-import json
 
 MODEL_PATH = os.path.join(os.getcwd(), "models", "regression_rf.pkl")
-
 
 def load_model(path):
     if os.path.exists(path):
         try:
-            import joblib
             return joblib.load(path)
-        except Exception as e1:
-            try:
-                with open(path, 'rb') as f:
-                    model = pickle.load(f, encoding='latin1')
-                return model
-            except Exception as e2:
-                st.error(f"Model incompatible. Will auto-train: {e2}")
-                return None
+        except Exception as e:
+            st.error(f"Failed to load model: {e}")
+            return None
     return None
-
 
 def build_input_df():
     st.sidebar.header("Applicant info")
+    
     age = st.sidebar.number_input("Age", min_value=18, max_value=100, value=30, key="max_age")
     monthly_salary = st.sidebar.number_input("Monthly salary", value=50000, key="max_monthly_salary")
     years_of_employment = st.sidebar.number_input("Years of employment", value=3, key="max_years_of_employment")
@@ -35,7 +27,7 @@ def build_input_df():
     credit_score = st.sidebar.number_input("Credit score", value=700, min_value=0, key="max_credit_score")
     requested_amount = st.sidebar.number_input("Requested loan amount", value=200000, key="max_requested_amount")
     requested_tenure = st.sidebar.number_input("Requested tenure (months)", value=36, key="max_requested_tenure")
-
+    
     gender = st.sidebar.selectbox("Gender", ["Male", "Female"], key="max_gender")
     marital_status = st.sidebar.selectbox("Marital status", ["Single", "Married"], key="max_marital_status")
     education = st.sidebar.selectbox("Education", ["Graduate", "Bachelor", "Diploma", "Master", "PhD"], key="max_education")
@@ -44,7 +36,7 @@ def build_input_df():
     house_type = st.sidebar.selectbox("House type", ["Own", "Rented"], key="max_house_type")
     existing_loans = st.sidebar.selectbox("Existing loans", ["Yes", "No"], key="max_existing_loans")
     emi_scenario = st.sidebar.selectbox("EMI scenario", ["Normal", "E-commerce", "Other"], key="max_emi_scenario")
-
+    
     row = {
         "age": age,
         "monthly_salary": monthly_salary,
@@ -66,82 +58,58 @@ def build_input_df():
     }
     return pd.DataFrame([row])
 
+st.header("Maximum EMI Predictor")
+st.info("Predicts a recommended 'max safe monthly EMI' for the applicant using a regression model.")
 
-def run():
-    st.header("Maximum EMI Predictor")
-    st.info("Predicts a recommended 'max safe monthly EMI' for the applicant using a regression model.")
+model = load_model(MODEL_PATH)
+X = build_input_df()
 
-    model = load_model(MODEL_PATH)
-    X = build_input_df()
-    st.write("Input preview:")
-    st.dataframe(X)
+st.write("Input preview:")
+st.dataframe(X)
 
-    # --- BEGIN: ensure model columns for regression model ---
-    MODEL_FEATURES = [
-        "age", "monthly_salary", "years_of_employment", "monthly_rent", "family_size",
-        "dependents", "school_fees", "college_fees", "travel_expenses",
-        "groceries_utilities", "other_monthly_expenses", "current_emi_amount",
-        "credit_score", "bank_balance", "emergency_fund", "requested_amount",
-        "requested_tenure", "gender", "marital_status", "education",
-        "employment_type", "company_type", "house_type", "existing_loans", "emi_scenario"
-    ]
+MODEL_FEATURES = [
+    "age", "monthly_salary", "years_of_employment", "monthly_rent", "family_size", "dependents",
+    "school_fees", "college_fees", "travel_expenses", "groceries_utilities", "other_monthly_expenses",
+    "current_emi_amount", "credit_score", "bank_balance", "emergency_fund", "requested_amount",
+    "requested_tenure", "gender", "marital_status", "education", "employment_type", "company_type",
+    "house_type", "existing_loans", "emi_scenario"
+]
 
-    # safe defaults: if a categorical is missing, use the value from input row if present, otherwise a neutral 'Unknown'
-    categorical_defaults = {
-        "gender": "Unknown",
-        "marital_status": "Unknown",
-        "education": "Unknown",
-        "employment_type": "Unknown",
-        "company_type": "Unknown",
-        "house_type": "Unknown",
-        "existing_loans": "No",
-        "emi_scenario": "Normal",
-    }
+categorical_defaults = {
+    "gender": "Unknown", "marital_status": "Unknown", "education": "Unknown",
+    "employment_type": "Unknown", "company_type": "Unknown", "house_type": "Unknown",
+    "existing_loans": "No", "emi_scenario": "Normal",
+}
 
-    # numeric defaults
-    numeric_defaults = {
-        "school_fees": 0,
-        "college_fees": 0,
-        "travel_expenses": 0,
-        "groceries_utilities": 0,
-        "other_monthly_expenses": 0,
-        "current_emi_amount": 0,
-        "bank_balance": 0,
-        "emergency_fund": 0,
-    }
+numeric_defaults = {
+    "school_fees": 0, "college_fees": 0, "travel_expenses": 0, "groceries_utilities": 0,
+    "other_monthly_expenses": 0, "current_emi_amount": 0, "bank_balance": 0, "emergency_fund": 0,
+}
 
-    # Add missing columns with sensible defaults (do not reference outer-scope variables)
-    for col in MODEL_FEATURES:
-        if col not in X.columns:
-            if col in categorical_defaults:
-                X[col] = categorical_defaults[col]
-            elif col in numeric_defaults:
-                X[col] = numeric_defaults[col]
-            else:
-                # if it's an unexpected feature, default 0
-                X[col] = 0
+for col in MODEL_FEATURES:
+    if col not in X.columns:
+        if col in categorical_defaults:
+            X[col] = categorical_defaults[col]
+        elif col in numeric_defaults:
+            X[col] = numeric_defaults[col]
+        else:
+            X[col] = 0
 
-    # Reorder to match model
-    X = X[MODEL_FEATURES]
+X = X[MODEL_FEATURES]
 
-    # Ensure numeric columns are numeric (optional safety)
-    num_cols = [
-        "age", "monthly_salary", "years_of_employment", "monthly_rent", "family_size", "dependents",
-        "school_fees", "college_fees", "travel_expenses", "groceries_utilities", "other_monthly_expenses",
-        "current_emi_amount", "credit_score", "bank_balance", "emergency_fund", "requested_amount",
-        "requested_tenure"
-    ]
-    X[num_cols] = X[num_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
-    # --- END ---
+num_cols = [
+    "age", "monthly_salary", "years_of_employment", "monthly_rent", "family_size", "dependents",
+    "school_fees", "college_fees", "travel_expenses", "groceries_utilities", "other_monthly_expenses",
+    "current_emi_amount", "credit_score", "bank_balance", "emergency_fund", "requested_amount", "requested_tenure"
+]
+X[num_cols] = X[num_cols].apply(pd.to_numeric, errors="coerce").fillna(0)
 
-    if model is None:
-        st.warning(f"No regression model found at {MODEL_PATH}. Place a saved model in models/")
-        return
-
+if model is None:
+    st.warning(f"No regression model found at {MODEL_PATH}. Place a saved model in models/")
+else:
     if st.button("Predict max EMI", key="max_predict_button"):
         try:
             pred = model.predict(X)[0]
-            st.success(f"Predicted max monthly EMI: **{float(pred):,.2f}**")
+            st.success(f"Predicted max monthly EMI: **₹{float(pred):,.2f}**")
         except Exception as e:
             st.error(f"Prediction failed: {e}")
-run()
